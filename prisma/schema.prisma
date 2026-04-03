@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventStatus {
+  DRAFT
+  ADMIN_REVIEW
+  LIVE
+  CANCELLED
+}
+
+enum DanceStyle {
+  SALSA
+  BACHATA
+  KIZOMBA
+  ZOUK
+  TANGO
+  OTHER
+}
+
+enum EventType {
+  PARTY
+  WORKSHOP
+  FESTIVAL
+  SOCIAL
+}
+
+enum DanceLevel {
+  OPEN
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum UserRole {
+  USER
+  ORGANIZER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  phone         String    @unique
+  name          String?
+  role          UserRole  @default(USER)
+  verified      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  events        Event[]   @relation("OrganizerEvents")
+  attendances   Attendance[]
+  otpCodes      OtpCode[]
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique @default(cuid())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+model OtpCode {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code        String
+  expiresAt   DateTime
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  title         String
+  description   String?
+  status        EventStatus @default(DRAFT)
+  danceStyle    DanceStyle[]
+  eventType     EventType   @default(PARTY)
+  level         DanceLevel  @default(OPEN)
+
+  startDate     DateTime
+  endDate       DateTime?
+  doorTime      DateTime?
+
+  venueName     String
+  address       String
+  city          String
+  lat           Float?
+  lng           Float?
+
+  price         String?
+  flyerUrl      String?
+  ticketUrl     String?
+
+  organizerId   String?
+  organizer     User?       @relation("OrganizerEvents", fields: [organizerId], references: [id])
+
+  attendances   Attendance[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([startDate])
+  @@index([status])
+  @@index([city])
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+}
