@@ -148,7 +148,21 @@ export default function EventForm({ defaultValues, eventId }: Props) {
       } else {
         const { error } = await res.json()
         if (typeof error === 'object' && error.fieldErrors) {
-          setErrors(error.fieldErrors)
+          const fieldErrors = error.fieldErrors as Record<string, string[]>
+          // Map flyerUrl validation error → upload field displayed in UI
+          const mapped: Errors = {}
+          for (const [key, msgs] of Object.entries(fieldErrors)) {
+            const msg = Array.isArray(msgs) ? msgs[0] : String(msgs)
+            if (key === 'flyerUrl') mapped.upload = msg
+            else (mapped as Record<string, string>)[key] = msg
+          }
+          const formErrors: string[] = error.formErrors ?? []
+          if (formErrors.length > 0 && Object.keys(mapped).length === 0) {
+            mapped.title = formErrors[0]
+          }
+          setErrors(mapped)
+        } else {
+          setErrors({ title: typeof error === 'string' ? error : 'Unbekannter Fehler' })
         }
       }
     } finally {
