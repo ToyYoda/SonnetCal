@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { EventStatus } from '@prisma/client'
 import CalendarClient from '@/components/calendar/CalendarClient'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function CalendarPage({
   searchParams,
@@ -13,7 +13,14 @@ export default async function CalendarPage({
 
   const where: any = {
     status: EventStatus.LIVE,
-    startDate: { gte: new Date() },
+    ...(from || to
+      ? {
+          startDate: {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to   ? { lte: new Date(to)   } : {}),
+          },
+        }
+      : { startDate: { gte: new Date() } }),
     ...(danceStyle && { danceStyle: { has: danceStyle } }),
     ...(eventType  && { eventType }),
     ...(level      && { level }),
