@@ -48,8 +48,8 @@ export default async function EventDetailPage({ params }: Props) {
 
         {/* Flyer */}
         {event.flyerUrl && (
-          <div className="rounded-2xl overflow-hidden mb-6 aspect-[4/3] bg-night-900">
-            <img src={event.flyerUrl} alt={event.title} className="w-full h-full object-cover" />
+          <div className="rounded-2xl overflow-hidden mb-6 bg-night-900">
+            <img src={event.flyerUrl} alt={event.title} className="w-full h-auto object-contain" />
           </div>
         )}
 
