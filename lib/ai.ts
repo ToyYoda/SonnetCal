@@ -1,6 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const OLLAMA_BASE = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+const VISION_MODEL = process.env.OLLAMA_VISION_MODEL ?? 'llama3.2-vision'
 
 export type ConfidenceScores = {
   title: number
@@ -33,69 +32,86 @@ const EXTRACTION_PROMPT = `Du analysierst ein Bild und bestimmst ob es ein Tanzv
 
 Antworte NUR mit einem validen JSON-Objekt (kein Markdown, keine Erklärung):
 {
-  "isEvent": true/false,
-  "title": "Eventname oder null",
+  "isEvent": true,
+  "title": "Eventname",
   "description": "Beschreibung oder null",
-  "danceStyle": ["SALSA","BACHATA","KIZOMBA","ZOUK","TANGO","OTHER"] (nur erkannte Stile),
-  "eventType": "PARTY"|"WORKSHOP"|"FESTIVAL"|"SOCIAL"|null,
-  "level": "OPEN"|"BEGINNER"|"INTERMEDIATE"|"ADVANCED"|null,
-  "startDate": "ISO-8601-Datetime oder null (Jahr ${new Date().getFullYear()} wenn nicht angegeben)",
-  "endDate": "ISO-8601-Datetime oder null",
-  "venueName": "Location-Name oder null",
-  "address": "Straße + Nr. oder null",
-  "city": "Stadtname oder null",
-  "price": "Eintrittspreistext oder null",
-  "ticketUrl": "Ticket-URL oder null",
+  "danceStyle": ["SALSA","BACHATA","KIZOMBA","ZOUK","TANGO","OTHER"],
+  "eventType": "PARTY",
+  "level": "OPEN",
+  "startDate": "2025-06-15T21:00:00",
+  "endDate": null,
+  "venueName": "Club XY",
+  "address": "Musterstraße 1",
+  "city": "Basel",
+  "price": "CHF 15",
+  "ticketUrl": null,
   "confidence": {
-    "title": 0.0–1.0,
-    "startDate": 0.0–1.0,
-    "venueName": 0.0–1.0,
-    "address": 0.0–1.0,
-    "city": 0.0–1.0,
-    "danceStyle": 0.0–1.0,
-    "overall": 0.0–1.0
+    "title": 0.95,
+    "startDate": 0.88,
+    "venueName": 0.91,
+    "address": 0.72,
+    "city": 0.95,
+    "danceStyle": 0.98,
+    "overall": 0.90
   }
 }
 
-Erkennbare Tanzstile: Salsa, Bachata, Kizomba, Zouk, Tango.
-Falls kein Tanzveranstaltungs-Flyer: isEvent=false, alle Felder null.`
+Regeln:
+- danceStyle: nur aus [SALSA, BACHATA, KIZOMBA, ZOUK, TANGO, OTHER]
+- eventType: nur PARTY, WORKSHOP, FESTIVAL oder SOCIAL
+- level: nur OPEN, BEGINNER, INTERMEDIATE oder ADVANCED
+- startDate: ISO-8601, Jahr ${new Date().getFullYear()} wenn nicht angegeben
+- confidence: 0.0–1.0 je nach Lesbarkeit/Eindeutigkeit
+- Falls KEIN Tanzveranstaltungs-Flyer: {"isEvent": false, alles andere null}`
 
-export async function analyzeFlyer(
-  imageData: string,
-  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-): Promise<FlyerExtraction> {
-  const msg = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType, data: imageData },
-        },
-        { type: 'text', text: EXTRACTION_PROMPT },
-      ],
-    }],
+async function ollamaChat(prompt: string, imageBase64?: string): Promise<string> {
+  const message: Record<string, unknown> = { role: 'user', content: prompt }
+  if (imageBase64) message.images = [imageBase64]
+
+  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: VISION_MODEL, messages: [message], stream: false }),
   })
 
-  const text = (msg.content[0] as Anthropic.TextBlock).text.trim()
-  // Strip potential markdown fences
-  const json = text.startsWith('```') ? text.replace(/```[a-z]*\n?/g, '').trim() : text
-  return JSON.parse(json) as FlyerExtraction
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Ollama error ${res.status}: ${err}`)
+  }
+
+  const data = await res.json()
+  return data.message?.content ?? ''
+}
+
+export async function analyzeFlyer(
+  imageBase64: string,
+  _mediaType: string
+): Promise<FlyerExtraction> {
+  const raw = await ollamaChat(EXTRACTION_PROMPT, imageBase64)
+
+  // Strip markdown fences if present
+  const json = raw.trim().startsWith('```')
+    ? raw.replace(/```[a-z]*\n?/g, '').trim()
+    : raw.trim()
+
+  // Extract first JSON object in case model adds text around it
+  const match = json.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('Kein JSON in Ollama-Antwort gefunden')
+
+  return JSON.parse(match[0]) as FlyerExtraction
 }
 
 export async function analyzeFlyerFromUrl(imageUrl: string): Promise<FlyerExtraction> {
   const res = await fetch(imageUrl)
   const buffer = await res.arrayBuffer()
   const base64 = Buffer.from(buffer).toString('base64')
-  const contentType = (res.headers.get('content-type') ?? 'image/jpeg') as FlyerExtraction['danceStyle'] extends string[] ? never : 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-  return analyzeFlyer(base64, contentType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp')
+  const ct = res.headers.get('content-type') ?? 'image/jpeg'
+  return analyzeFlyer(base64, ct)
 }
 
 const CANCELLATION_KEYWORDS = [
   'fällt aus', 'abgesagt', 'storniert', 'cancelled', 'findet nicht statt',
-  'verschoben', 'abgesagt', 'entfällt', 'wird abgesagt',
+  'verschoben', 'entfällt', 'wird abgesagt',
 ]
 
 export function detectCancellation(text: string): boolean {
