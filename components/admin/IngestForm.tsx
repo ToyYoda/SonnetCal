@@ -28,7 +28,7 @@ export default function IngestForm() {
           ? `✅ Automatisch veröffentlicht (${pct}% Konfidenz)`
           : `🔍 Zur Review hinzugefügt (${pct}% Konfidenz)`
       )
-      router.refresh()
+      setTimeout(() => router.refresh(), 2500)
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''

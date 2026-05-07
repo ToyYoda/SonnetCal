@@ -7,6 +7,8 @@ import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 
+export const maxDuration = 120
+
 const CONFIDENCE_AUTO_PUBLISH = 0.95
 
 export async function POST(request: NextRequest) {
@@ -31,7 +33,6 @@ export async function POST(request: NextRequest) {
   const base64 = Buffer.from(bytes).toString('base64')
   const safeType = (ALLOWED.includes(file.type) ? file.type : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
-  // Save locally
   const ext      = file.type === 'image/png' ? '.png' : file.type === 'image/webp' ? '.webp' : '.jpg'
   const filename = `${randomUUID()}${ext}`
   const uploadDir = join(process.cwd(), 'public', 'uploads')
@@ -39,8 +40,16 @@ export async function POST(request: NextRequest) {
   await writeFile(join(uploadDir, filename), Buffer.from(bytes))
   const flyerUrl = `/uploads/${filename}`
 
-  // AI analysis
-  const extraction = await analyzeFlyer(base64, safeType)
+  let extraction
+  try {
+    extraction = await analyzeFlyer(base64, safeType)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json(
+      { error: `KI-Analyse fehlgeschlagen: ${msg}. Ist Ollama gestartet?` },
+      { status: 502 }
+    )
+  }
 
   if (!extraction.isEvent) {
     return NextResponse.json({ isEvent: false, message: 'Kein Event-Flyer erkannt' })
