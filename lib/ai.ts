@@ -60,7 +60,7 @@ Regeln:
 - danceStyle: nur aus [SALSA, BACHATA, KIZOMBA, ZOUK, TANGO, OTHER]
 - eventType: nur PARTY, WORKSHOP, FESTIVAL oder SOCIAL
 - level: nur OPEN, BEGINNER, INTERMEDIATE oder ADVANCED
-- startDate: ISO-8601, Jahr ${new Date().getFullYear()} wenn nicht angegeben
+- startDate: ISO-8601, verwende Jahr ${new Date().getFullYear()} wenn nicht eindeutig erkennbar; niemals ein Datum in der Vergangenheit (vor ${new Date().toISOString().slice(0, 10)})
 - confidence: 0.0–1.0 je nach Lesbarkeit/Eindeutigkeit
 - Falls KEIN Tanzveranstaltungs-Flyer: {"isEvent": false, alles andere null}`
 
