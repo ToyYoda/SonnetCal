@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: twilioConfigured ? 'Code wurde via WhatsApp gesendet' : 'Code wurde gesendet',
-      // Only expose OTP in dev when WhatsApp is not configured (mock mode)
-      ...(!twilioConfigured && process.env.NODE_ENV === 'development' && { devOtp: otp }),
+      // Always expose OTP in dev mode for easy testing
+      ...(process.env.NODE_ENV === 'development' && { devOtp: otp }),
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unbekannter Fehler'

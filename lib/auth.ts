@@ -31,6 +31,11 @@ async function sendWhatsAppOtp(phone: string, otp: string): Promise<void> {
 
   if (!res.ok) {
     const err = await res.text()
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('WhatsApp send failed (dev fallback):', err)
+      console.log(`📱 OTP for ${phone}: ${otp}`)
+      return
+    }
     console.error('WhatsApp send failed:', err)
     throw new Error('WhatsApp-Nachricht konnte nicht gesendet werden')
   }
