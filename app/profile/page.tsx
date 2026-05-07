@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { formatDate } from '@/lib/utils'
 import { LogOut, Calendar, Heart, User } from 'lucide-react'
+import ProfileEditForm from '@/components/profile/ProfileEditForm'
 
 export default async function ProfilePage() {
   const session = await getSession()
@@ -45,11 +46,19 @@ export default async function ProfilePage() {
       <main className="md:pt-16 pb-24 md:pb-8 max-w-md mx-auto px-4 pt-6">
         {/* Profile header */}
         <div className="card mb-4 text-center py-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-neon-pink/30 to-neon-purple/30 flex items-center justify-center mx-auto mb-3 border border-neon-pink/20">
-            <span className="font-display text-2xl text-white">
-              {(session.user.name ?? session.user.phone)[0].toUpperCase()}
-            </span>
-          </div>
+          {session.user.avatarUrl ? (
+            <img
+              src={session.user.avatarUrl}
+              alt={session.user.name ?? 'Avatar'}
+              className="w-20 h-20 rounded-2xl object-cover mx-auto mb-3 border border-night-700"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-neon-pink/30 to-neon-purple/30 flex items-center justify-center mx-auto mb-3 border border-neon-pink/20">
+              <span className="font-display text-3xl text-white">
+                {(session.user.name ?? session.user.phone)[0].toUpperCase()}
+              </span>
+            </div>
+          )}
           <h2 className="font-display text-xl text-white">{session.user.name ?? 'Tänzer:in'}</h2>
           <p className="text-night-500 text-sm">{session.user.phone}</p>
           {session.user.verified && (
@@ -57,6 +66,11 @@ export default async function ProfilePage() {
               ✓ Verifiziert
             </span>
           )}
+          <ProfileEditForm
+            name={session.user.name}
+            avatarUrl={session.user.avatarUrl ?? null}
+            phone={session.user.phone}
+          />
         </div>
 
         {/* Stats */}
