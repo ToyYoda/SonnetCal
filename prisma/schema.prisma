@@ -99,6 +99,8 @@ model Event {
   price         String?
   flyerUrl      String?
   ticketUrl     String?
+  confidenceScores Json?
+  ingestSource  String?
 
   organizerId   String?
   organizer     User?       @relation("OrganizerEvents", fields: [organizerId], references: [id])

@@ -38,7 +38,7 @@ export default async function EventDetailPage({ params }: Props) {
 
   return (
     <div className="min-h-screen">
-      <Nav />
+      <Nav isAdmin={session?.user?.role === 'ADMIN'} />
       <main className="md:pt-16 pb-24 md:pb-8 max-w-2xl mx-auto px-4 pt-6">
         {/* Back */}
         <Link href="/calendar" className="btn-ghost pl-0 mb-6 inline-flex">

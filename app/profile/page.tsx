@@ -11,7 +11,7 @@ export default async function ProfilePage() {
   if (!session) {
     return (
       <div className="min-h-screen">
-        <Nav />
+        <Nav isAdmin={session?.user?.role === 'ADMIN'} />
         <main className="md:pt-16 pb-24 md:pb-8 max-w-md mx-auto px-4 pt-12">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl bg-neon-pink/10 border border-neon-pink/20 flex items-center justify-center mx-auto mb-4">
@@ -41,7 +41,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="min-h-screen">
-      <Nav />
+      <Nav isAdmin={session?.user?.role === 'ADMIN'} />
       <main className="md:pt-16 pb-24 md:pb-8 max-w-md mx-auto px-4 pt-6">
         {/* Profile header */}
         <div className="card mb-4 text-center py-8">
