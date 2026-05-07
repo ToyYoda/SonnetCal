@@ -7,12 +7,13 @@ import Nav from '@/components/layout/Nav'
 import AttendButton from '@/components/events/AttendButton'
 import { MapPin, Clock, Ticket, ArrowLeft, Calendar, User, Globe } from 'lucide-react'
 
-type Props = { params: { id: string } }
+type Props = { params: Promise<{ id: string }> }
 
 export default async function EventDetailPage({ params }: Props) {
+  const { id } = await params
   const [event, session] = await Promise.all([
     prisma.event.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         organizer: { select: { id: true, name: true } },
         _count: { select: { attendances: true } },

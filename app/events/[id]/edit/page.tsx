@@ -7,11 +7,12 @@ import Nav from '@/components/layout/Nav'
 import EventForm from '@/components/events/EventForm'
 import { format } from 'date-fns'
 
-type Props = { params: { id: string } }
+type Props = { params: Promise<{ id: string }> }
 
 export default async function EditEventPage({ params }: Props) {
+  const { id } = await params
   const [event, session] = await Promise.all([
-    prisma.event.findUnique({ where: { id: params.id } }),
+    prisma.event.findUnique({ where: { id } }),
     getSession(),
   ])
 

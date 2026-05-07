@@ -4,11 +4,12 @@ import { getSession } from '@/lib/auth'
 import { EventUpdateSchema } from '@/lib/validations'
 import { UserRole } from '@prisma/client'
 
-type Params = { params: { id: string } }
+type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_: NextRequest, { params }: Params) {
+  const { id } = await params
   const event = await prisma.event.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       organizer:   { select: { id: true, name: true, phone: true } },
       attendances: { include: { user: { select: { id: true, name: true } } } },
@@ -20,10 +21,11 @@ export async function GET(_: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
 
-  const event = await prisma.event.findUnique({ where: { id: params.id } })
+  const event = await prisma.event.findUnique({ where: { id } })
   if (!event) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 })
 
   const isAdmin = session.user.role === UserRole.ADMIN
@@ -33,12 +35,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const body = await request.json()
-  const parsed = EventUpdateSchema.safeParse({ ...body, id: params.id })
+  const parsed = EventUpdateSchema.safeParse({ ...body, id })
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 })
 
-  const { id, startDate, endDate, doorTime, ...rest } = parsed.data
+  const { id: _id, startDate, endDate, doorTime, ...rest } = parsed.data
   const updated = await prisma.event.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       ...rest,
       ...(startDate && { startDate: new Date(startDate) }),
@@ -50,10 +52,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_: NextRequest, { params }: Params) {
+  const { id } = await params
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
 
-  const event = await prisma.event.findUnique({ where: { id: params.id } })
+  const event = await prisma.event.findUnique({ where: { id } })
   if (!event) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 })
 
   const isAdmin = session.user.role === UserRole.ADMIN
@@ -62,6 +65,6 @@ export async function DELETE(_: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 })
   }
 
-  await prisma.event.delete({ where: { id: params.id } })
+  await prisma.event.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }
