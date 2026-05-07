@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Download image (Twilio requires auth for media URLs)
-      const imageBase64 = await downloadTwilioMedia(mediaUrl)
-      const safeType = toSafeMediaType(mediaContentType)
+      const { base64: imageBase64, contentType: actualType } = await downloadTwilioMedia(mediaUrl)
+      const safeType = toSafeMediaType(actualType)
 
       // Save locally first
       const flyerUrl = await saveImageLocally(imageBase64, safeType)
@@ -141,16 +141,24 @@ async function handleCancellation(text: string, userId: string): Promise<boolean
   return true
 }
 
-async function downloadTwilioMedia(url: string): Promise<string> {
+async function downloadTwilioMedia(url: string): Promise<{ base64: string; contentType: string }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID
   const authToken  = process.env.TWILIO_AUTH_TOKEN
   const headers: Record<string, string> = {}
   if (accountSid && authToken) {
     headers['Authorization'] = `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
   }
-  const res = await fetch(url, { headers })
+  const res = await fetch(url, { headers, redirect: 'follow' })
+  if (!res.ok) throw new Error(`Media download failed: ${res.status} ${res.statusText}`)
+
+  const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+  if (!contentType.startsWith('image/')) {
+    const text = await res.text()
+    throw new Error(`Unexpected media content-type "${contentType}": ${text.slice(0, 200)}`)
+  }
+
   const buffer = await res.arrayBuffer()
-  return Buffer.from(buffer).toString('base64')
+  return { base64: Buffer.from(buffer).toString('base64'), contentType }
 }
 
 async function saveImageLocally(base64: string, mediaType: string): Promise<string> {
