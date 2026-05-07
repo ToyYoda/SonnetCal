@@ -71,7 +71,13 @@ async function ollamaChat(prompt: string, imageBase64?: string): Promise<string>
   const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: VISION_MODEL, messages: [message], stream: false }),
+    body: JSON.stringify({
+      model: VISION_MODEL,
+      messages: [message],
+      stream: false,
+      format: 'json',
+      options: { temperature: 0 },
+    }),
   })
 
   if (!res.ok) {
@@ -83,22 +89,34 @@ async function ollamaChat(prompt: string, imageBase64?: string): Promise<string>
   return data.message?.content ?? ''
 }
 
+function extractFirstJson(text: string): string {
+  const start = text.indexOf('{')
+  if (start === -1) throw new Error('Kein JSON in Ollama-Antwort gefunden')
+
+  let depth = 0
+  let inString = false
+  let escape = false
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (escape)              { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"')          { inString = !inString; continue }
+    if (inString)            continue
+    if (ch === '{') depth++
+    if (ch === '}') { depth--; if (depth === 0) return text.slice(start, i + 1) }
+  }
+
+  throw new Error('Unvollständiges JSON in Ollama-Antwort')
+}
+
 export async function analyzeFlyer(
   imageBase64: string,
   _mediaType: string
 ): Promise<FlyerExtraction> {
   const raw = await ollamaChat(EXTRACTION_PROMPT, imageBase64)
-
-  // Strip markdown fences if present
-  const json = raw.trim().startsWith('```')
-    ? raw.replace(/```[a-z]*\n?/g, '').trim()
-    : raw.trim()
-
-  // Extract first JSON object in case model adds text around it
-  const match = json.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Kein JSON in Ollama-Antwort gefunden')
-
-  return JSON.parse(match[0]) as FlyerExtraction
+  const jsonStr = extractFirstJson(raw)
+  return JSON.parse(jsonStr) as FlyerExtraction
 }
 
 export async function analyzeFlyerFromUrl(imageUrl: string): Promise<FlyerExtraction> {
