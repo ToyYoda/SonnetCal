@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { analyzeFlyer } from '@/lib/ai'
 import { prisma } from '@/lib/prisma'
-import { EventStatus, UserRole } from '@prisma/client'
+import { DanceStyle, EventStatus, EventType, DanceLevel, UserRole } from '@prisma/client'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
@@ -59,13 +59,29 @@ export async function POST(request: NextRequest) {
     ? EventStatus.LIVE
     : EventStatus.ADMIN_REVIEW
 
+  const VALID_STYLES  = new Set(Object.values(DanceStyle))
+  const VALID_TYPES   = new Set(Object.values(EventType))
+  const VALID_LEVELS  = new Set(Object.values(DanceLevel))
+
+  const danceStyle = (extraction.danceStyle ?? [])
+    .map(s => s.toUpperCase())
+    .filter(s => VALID_STYLES.has(s as DanceStyle)) as DanceStyle[]
+
+  const eventType = VALID_TYPES.has(extraction.eventType as EventType)
+    ? extraction.eventType as EventType
+    : EventType.PARTY
+
+  const level = VALID_LEVELS.has(extraction.level as DanceLevel)
+    ? extraction.level as DanceLevel
+    : DanceLevel.OPEN
+
   const event = await prisma.event.create({
     data: {
       title:            extraction.title       ?? 'Unbekanntes Event',
       description:      extraction.description ?? undefined,
-      danceStyle:       (extraction.danceStyle ?? []) as any,
-      eventType:        (extraction.eventType  ?? 'PARTY') as any,
-      level:            (extraction.level      ?? 'OPEN') as any,
+      danceStyle,
+      eventType,
+      level,
       startDate:        new Date(extraction.startDate ?? Date.now()),
       endDate:          extraction.endDate ? new Date(extraction.endDate) : undefined,
       venueName:        extraction.venueName   ?? 'Unbekannt',
