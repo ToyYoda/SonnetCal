@@ -144,11 +144,25 @@ async function handleCancellation(text: string, userId: string): Promise<boolean
 async function downloadTwilioMedia(url: string): Promise<{ base64: string; contentType: string }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID
   const authToken  = process.env.TWILIO_AUTH_TOKEN
-  const headers: Record<string, string> = {}
-  if (accountSid && authToken) {
-    headers['Authorization'] = `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+
+  if (!accountSid || !authToken) throw new Error('Twilio credentials missing in .env')
+
+  const authHeader = `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+
+  // First request to Twilio API with auth — don't follow redirects automatically
+  // because Node.js fetch strips Authorization on cross-origin redirects
+  let res = await fetch(url, {
+    headers: { Authorization: authHeader },
+    redirect: 'manual',
+  })
+
+  // Follow redirect without auth (CDN URLs are pre-signed / public)
+  if (res.status >= 300 && res.status < 400) {
+    const location = res.headers.get('location')
+    if (!location) throw new Error('Redirect with no Location header')
+    res = await fetch(location)
   }
-  const res = await fetch(url, { headers, redirect: 'follow' })
+
   if (!res.ok) throw new Error(`Media download failed: ${res.status} ${res.statusText}`)
 
   const contentType = res.headers.get('content-type') ?? 'image/jpeg'
