@@ -1,5 +1,5 @@
 const OLLAMA_BASE = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
-const VISION_MODEL = process.env.OLLAMA_VISION_MODEL ?? 'llama3.2-vision'
+const VISION_MODEL = process.env.OLLAMA_VISION_MODEL ?? 'minicpm-v'
 
 export type ConfidenceScores = {
   title: number
