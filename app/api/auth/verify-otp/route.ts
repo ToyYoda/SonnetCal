@@ -14,6 +14,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ungültiger oder abgelaufener Code' }, { status: 401 })
   }
 
-  setSessionCookie(token)
+  await setSessionCookie(token)
   return NextResponse.json({ success: true })
 }

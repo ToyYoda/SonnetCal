@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Save, Loader2, Plus, X } from 'lucide-react'
+import { Save, Loader2, Upload, X, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const DANCE_STYLES = ['SALSA','BACHATA','KIZOMBA','ZOUK','TANGO','OTHER']
@@ -37,13 +37,22 @@ const initial: FormData = {
   venueName:'', address:'', city:'', price:'', flyerUrl:'', ticketUrl:'',
 }
 
-type Errors = Partial<Record<keyof FormData, string>>
+type Errors = Partial<Record<keyof FormData | 'upload', string>>
 
-export default function EventForm({ defaultValues }: { defaultValues?: Partial<FormData> }) {
+type Props = {
+  defaultValues?: Partial<FormData>
+  eventId?: string
+}
+
+export default function EventForm({ defaultValues, eventId }: Props) {
+  const isEdit = !!eventId
   const [form, setForm] = useState<FormData>({ ...initial, ...defaultValues })
   const [errors, setErrors] = useState<Errors>({})
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [flyerPreview, setFlyerPreview] = useState<string | null>(defaultValues?.flyerUrl ?? null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   const set = (key: keyof FormData, value: string) => {
@@ -61,15 +70,42 @@ export default function EventForm({ defaultValues }: { defaultValues?: Partial<F
     if (errors.danceStyle) setErrors(e => ({ ...e, danceStyle: undefined }))
   }
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setErrors(err => ({ ...err, upload: undefined }))
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Upload fehlgeschlagen')
+      set('flyerUrl', data.url)
+      setFlyerPreview(data.url)
+    } catch (err) {
+      setErrors(e => ({ ...e, upload: err instanceof Error ? err.message : 'Upload fehlgeschlagen' }))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeFlyerr = () => {
+    set('flyerUrl', '')
+    setFlyerPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   const validate = (): boolean => {
     const e: Errors = {}
-    if (!form.title.trim())     e.title     = 'Titel ist erforderlich'
-    if (form.title.length < 3)  e.title     = 'Titel zu kurz (min. 3 Zeichen)'
-    if (!form.danceStyle.length) e.danceStyle = 'Mindestens einen Tanzstil wählen'
-    if (!form.startDate)        e.startDate  = 'Startdatum ist erforderlich'
-    if (!form.venueName.trim()) e.venueName  = 'Veranstaltungsort ist erforderlich'
-    if (!form.address.trim())   e.address    = 'Adresse ist erforderlich'
-    if (!form.city.trim())      e.city       = 'Stadt ist erforderlich'
+    if (!form.title.trim())      e.title      = 'Titel ist erforderlich'
+    if (form.title.length < 3)   e.title      = 'Titel zu kurz (min. 3 Zeichen)'
+    if (!form.danceStyle.length) e.danceStyle  = 'Mindestens einen Tanzstil wählen'
+    if (!form.startDate)         e.startDate   = 'Startdatum ist erforderlich'
+    if (!form.venueName.trim())  e.venueName   = 'Veranstaltungsort ist erforderlich'
+    if (!form.address.trim())    e.address     = 'Adresse ist erforderlich'
+    if (!form.city.trim())       e.city        = 'Stadt ist erforderlich'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -97,8 +133,10 @@ export default function EventForm({ defaultValues }: { defaultValues?: Partial<F
     }
 
     try {
-      const res = await fetch('/api/events', {
-        method: 'POST',
+      const url    = isEdit ? `/api/events/${eventId}` : '/api/events'
+      const method = isEdit ? 'PATCH' : 'POST'
+      const res    = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
@@ -110,7 +148,21 @@ export default function EventForm({ defaultValues }: { defaultValues?: Partial<F
       } else {
         const { error } = await res.json()
         if (typeof error === 'object' && error.fieldErrors) {
-          setErrors(error.fieldErrors)
+          const fieldErrors = error.fieldErrors as Record<string, string[]>
+          // Map flyerUrl validation error → upload field displayed in UI
+          const mapped: Errors = {}
+          for (const [key, msgs] of Object.entries(fieldErrors)) {
+            const msg = Array.isArray(msgs) ? msgs[0] : String(msgs)
+            if (key === 'flyerUrl') mapped.upload = msg
+            else (mapped as Record<string, string>)[key] = msg
+          }
+          const formErrors: string[] = error.formErrors ?? []
+          if (formErrors.length > 0 && Object.keys(mapped).length === 0) {
+            mapped.title = formErrors[0]
+          }
+          setErrors(mapped)
+        } else {
+          setErrors({ title: typeof error === 'string' ? error : 'Unbekannter Fehler' })
         }
       }
     } finally {
@@ -122,8 +174,8 @@ export default function EventForm({ defaultValues }: { defaultValues?: Partial<F
     return (
       <div className="card text-center py-16 animate-in">
         <p className="text-4xl mb-3">🎉</p>
-        <p className="text-white font-medium text-lg">Event erstellt!</p>
-        <p className="text-night-400 text-sm mt-1">Wird zur Überprüfung eingereicht…</p>
+        <p className="text-white font-medium text-lg">{isEdit ? 'Event aktualisiert!' : 'Event erstellt!'}</p>
+        <p className="text-night-400 text-sm mt-1">{isEdit ? 'Weiterleitung…' : 'Wird zur Überprüfung eingereicht…'}</p>
       </div>
     )
   }
@@ -208,23 +260,55 @@ export default function EventForm({ defaultValues }: { defaultValues?: Partial<F
 
       {/* Optional */}
       <Section title="Weitere Infos">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Eintritt">
-            <input className="input-field" placeholder="z.B. CHF 15" value={form.price} onChange={e => set('price', e.target.value)} />
-          </Field>
-          <Field label="Flyer-URL">
-            <input type="url" className="input-field" placeholder="https://…" value={form.flyerUrl} onChange={e => set('flyerUrl', e.target.value)} />
-          </Field>
-        </div>
+        <Field label="Eintritt">
+          <input className="input-field" placeholder="z.B. CHF 15" value={form.price} onChange={e => set('price', e.target.value)} />
+        </Field>
+
+        {/* Flyer Upload */}
+        <Field label="Flyer" error={errors.upload}>
+          {flyerPreview ? (
+            <div className="relative rounded-xl overflow-hidden bg-night-900 aspect-video">
+              <img src={flyerPreview} alt="Flyer Vorschau" className="w-full h-full object-contain" />
+              <button
+                type="button"
+                onClick={removeFlyerr}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-night-900/80 text-night-300 hover:text-red-400 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full flex flex-col items-center gap-2 py-8 rounded-xl border border-dashed border-night-700 hover:border-neon-pink/40 hover:bg-neon-pink/5 transition-all text-night-400 hover:text-neon-pink"
+            >
+              {uploading
+                ? <Loader2 className="w-6 h-6 animate-spin" />
+                : <><Upload className="w-6 h-6" /><ImageIcon className="w-4 h-4 -mt-1" /></>
+              }
+              <span className="text-sm">{uploading ? 'Wird hochgeladen…' : 'Flyer hochladen (JPG, PNG, WebP · max. 5 MB)'}</span>
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </Field>
+
         <Field label="Ticket-URL">
           <input type="url" className="input-field" placeholder="https://…" value={form.ticketUrl} onChange={e => set('ticketUrl', e.target.value)} />
         </Field>
       </Section>
 
       {/* Submit */}
-      <button onClick={submit} disabled={loading} className="btn-primary w-full py-3.5 text-base">
+      <button onClick={submit} disabled={loading || uploading} className="btn-primary w-full py-3.5 text-base">
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {loading ? 'Wird gespeichert…' : 'Event einreichen'}
+        {loading ? 'Wird gespeichert…' : isEdit ? 'Änderungen speichern' : 'Event einreichen'}
       </button>
     </div>
   )

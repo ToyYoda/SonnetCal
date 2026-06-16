@@ -32,7 +32,10 @@ export default function AuthFlow() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error?.formErrors?.[0] ?? 'Fehler beim Senden')
+        const msg = typeof data.error === 'string'
+          ? data.error
+          : data.error?.formErrors?.[0] ?? 'Fehler beim Senden'
+        setError(msg)
         return
       }
       if (data.devOtp) setDevOtp(data.devOtp)

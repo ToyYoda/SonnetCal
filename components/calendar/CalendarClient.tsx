@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { format, addMonths, subMonths } from 'date-fns'
+import { useRouter } from 'next/navigation'
+import { format, addMonths, subMonths, addWeeks, subWeeks, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { LayoutGrid, List, ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react'
+import { LayoutGrid, List, CalendarDays, ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn, getCalendarDays, isSameDate, isCurrentMonth, DANCE_STYLE_LABELS, EVENT_TYPE_LABELS, LEVEL_LABELS } from '@/lib/utils'
 import EventCard from '@/components/events/EventCard'
 import MonthGrid from '@/components/calendar/MonthGrid'
+import WeekGrid from '@/components/calendar/WeekGrid'
 
 type Event = {
   id: string
@@ -30,7 +31,7 @@ type Props = {
   searchParams: Record<string, string>
 }
 
-type ViewMode = 'month' | 'list'
+type ViewMode = 'month' | 'week' | 'list'
 
 const DANCE_STYLES = ['SALSA', 'BACHATA', 'KIZOMBA', 'ZOUK', 'TANGO']
 const EVENT_TYPES  = ['PARTY', 'WORKSHOP', 'FESTIVAL', 'SOCIAL']
@@ -40,6 +41,7 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
   const router = useRouter()
   const [view, setView] = useState<ViewMode>('list')
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [currentWeek, setCurrentWeek] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [search, setSearch] = useState(searchParams.search ?? '')
@@ -49,6 +51,8 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
     eventType:  searchParams.eventType  ?? '',
     level:      searchParams.level      ?? '',
     city:       searchParams.city       ?? '',
+    from:       searchParams.from       ?? '',
+    to:         searchParams.to         ?? '',
   })
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length
@@ -66,8 +70,14 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
     applyFilters(next, search)
   }
 
+  const setDateFilter = (key: 'from' | 'to', val: string) => {
+    const next = { ...filters, [key]: val }
+    setFilters(next)
+    applyFilters(next, search)
+  }
+
   const clearAll = () => {
-    const empty = { danceStyle: '', eventType: '', level: '', city: '' }
+    const empty = { danceStyle: '', eventType: '', level: '', city: '', from: '', to: '' }
     setFilters(empty)
     setSearch('')
     router.push('/calendar')
@@ -80,9 +90,15 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
     return events.filter(e => isSameDate(new Date(e.startDate), selectedDay))
   }, [events, selectedDay])
 
-  const displayedEvents = selectedDay && view === 'month' ? dayEvents : events
+  const displayedEvents = selectedDay && view !== 'list' ? dayEvents : events
 
   const calendarDays = useMemo(() => getCalendarDays(currentMonth), [currentMonth])
+
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(currentWeek, { weekStartsOn: 1 })
+    const end   = endOfWeek(currentWeek,   { weekStartsOn: 1 })
+    return eachDayOfInterval({ start, end })
+  }, [currentWeek])
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, Event[]>()
@@ -93,6 +109,12 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
     })
     return map
   }, [events])
+
+  const weekLabel = useMemo(() => {
+    const start = startOfWeek(currentWeek, { weekStartsOn: 1 })
+    const end   = endOfWeek(currentWeek,   { weekStartsOn: 1 })
+    return `${format(start, 'd. MMM', { locale: de })} – ${format(end, 'd. MMM yyyy', { locale: de })}`
+  }, [currentWeek])
 
   return (
     <div className="max-w-5xl mx-auto px-4 pt-6 animate-in">
@@ -106,23 +128,28 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
         </div>
 
         {/* View toggle */}
-        <div className="flex items-center gap-2">
-          <div className="flex glass rounded-xl p-1">
-            <button
-              onClick={() => setView('month')}
-              className={cn('p-2 rounded-lg transition-all', view === 'month' ? 'bg-neon-pink/20 text-neon-pink' : 'text-night-400 hover:text-white')}
-              title="Monatsansicht"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={cn('p-2 rounded-lg transition-all', view === 'list' ? 'bg-neon-pink/20 text-neon-pink' : 'text-night-400 hover:text-white')}
-              title="Listenansicht"
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="flex glass rounded-xl p-1">
+          <button
+            onClick={() => setView('month')}
+            className={cn('p-2 rounded-lg transition-all', view === 'month' ? 'bg-neon-pink/20 text-neon-pink' : 'text-night-400 hover:text-white')}
+            title="Monatsansicht"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setView('week')}
+            className={cn('p-2 rounded-lg transition-all', view === 'week' ? 'bg-neon-pink/20 text-neon-pink' : 'text-night-400 hover:text-white')}
+            title="Wochenansicht"
+          >
+            <CalendarDays className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setView('list')}
+            className={cn('p-2 rounded-lg transition-all', view === 'list' ? 'bg-neon-pink/20 text-neon-pink' : 'text-night-400 hover:text-white')}
+            title="Listenansicht"
+          >
+            <List className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -172,6 +199,31 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
             active={filters.eventType} onToggle={v => setFilter('eventType', v)} color="purple" />
           <FilterGroup label="Level" options={LEVELS} labels={LEVEL_LABELS}
             active={filters.level} onToggle={v => setFilter('level', v)} color="teal" />
+
+          {/* Date range */}
+          <div>
+            <p className="text-night-400 text-xs font-medium uppercase tracking-wider mb-2">Zeitraum</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-night-500 text-xs mb-1">Von</label>
+                <input
+                  type="date"
+                  value={filters.from}
+                  onChange={e => setDateFilter('from', e.target.value)}
+                  className="input-field text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-night-500 text-xs mb-1">Bis</label>
+                <input
+                  type="date"
+                  value={filters.to}
+                  onChange={e => setDateFilter('to', e.target.value)}
+                  className="input-field text-sm"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -189,7 +241,6 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
-
           <MonthGrid
             days={calendarDays}
             currentMonth={currentMonth}
@@ -200,9 +251,30 @@ export default function CalendarClient({ initialEvents, searchParams }: Props) {
         </div>
       )}
 
-      {/* Events */}
+      {/* Week view */}
+      {view === 'week' && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setCurrentWeek(w => subWeeks(w, 1))} className="btn-ghost p-2">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <h2 className="font-display text-lg text-white">{weekLabel}</h2>
+            <button onClick={() => setCurrentWeek(w => addWeeks(w, 1))} className="btn-ghost p-2">
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+          <WeekGrid
+            days={weekDays}
+            eventsByDate={eventsByDate}
+            selectedDay={selectedDay}
+            onSelectDay={day => setSelectedDay(prev => prev && isSameDate(prev, day) ? null : day)}
+          />
+        </div>
+      )}
+
+      {/* Events list */}
       <div className="space-y-3">
-        {view === 'month' && selectedDay && (
+        {(view === 'month' || view === 'week') && selectedDay && (
           <p className="text-night-400 text-sm mb-2">
             Events am {format(selectedDay, 'dd. MMMM', { locale: de })}
           </p>

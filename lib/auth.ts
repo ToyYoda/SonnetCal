@@ -2,6 +2,45 @@ import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { prisma } from './prisma'
 
+async function sendWhatsAppOtp(phone: string, otp: string): Promise<void> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID
+  const authToken  = process.env.TWILIO_AUTH_TOKEN
+  const fromNumber = process.env.TWILIO_WHATSAPP_FROM
+
+  if (!accountSid || !authToken || !fromNumber) {
+    // Dev fallback: print to console
+    console.log(`📱 OTP for ${phone}: ${otp}`)
+    return
+  }
+
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
+  const body = new URLSearchParams({
+    From: `whatsapp:${fromNumber}`,
+    To:   `whatsapp:${phone}`,
+    Body: `Dein SonnetCal Verifizierungscode: *${otp}*\n\nGültig für 10 Minuten.`,
+  })
+
+  const res = await fetch(url, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+    },
+    body: body.toString(),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('WhatsApp send failed (dev fallback):', err)
+      console.log(`📱 OTP for ${phone}: ${otp}`)
+      return
+    }
+    console.error('WhatsApp send failed:', err)
+    throw new Error('WhatsApp-Nachricht konnte nicht gesendet werden')
+  }
+}
+
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET ?? 'dev-secret-change-in-production'
 )
@@ -21,7 +60,7 @@ export async function createSession(userId: string): Promise<string> {
 }
 
 export async function getSession() {
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return null
   try {
@@ -38,7 +77,7 @@ export async function getSession() {
 }
 
 export async function deleteSession() {
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return
   try {
@@ -48,8 +87,9 @@ export async function deleteSession() {
   cookieStore.delete(COOKIE_NAME)
 }
 
-export function setSessionCookie(token: string) {
-  cookies().set(COOKIE_NAME, token, {
+export async function setSessionCookie(token: string) {
+  const cookieStore = await cookies()
+  cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -72,6 +112,7 @@ export async function generateOtp(phone: string): Promise<{ otp: string; userId:
   const code = Math.floor(100000 + Math.random() * 900000).toString()
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 min
   await prisma.otpCode.create({ data: { userId: user.id, code, expiresAt } })
+  await sendWhatsAppOtp(phone, code)
   return { otp: code, userId: user.id }
 }
 

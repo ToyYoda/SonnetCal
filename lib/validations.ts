@@ -13,8 +13,8 @@ export const EventCreateSchema = z.object({
   address:     z.string().min(5, 'Adresse ist erforderlich'),
   city:        z.string().min(2, 'Stadt ist erforderlich'),
   price:       z.string().optional(),
-  flyerUrl:    z.string().url().optional().or(z.literal('')),
-  ticketUrl:   z.string().url().optional().or(z.literal('')),
+  flyerUrl:    z.string().optional().or(z.literal('')),
+  ticketUrl:   z.string().url('Bitte eine gültige URL eingeben').optional().or(z.literal('')),
 })
 
 export const EventUpdateSchema = EventCreateSchema.partial().extend({

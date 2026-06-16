@@ -9,20 +9,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 })
   }
 
-  const { otp, userId } = await generateOtp(parsed.data.phone)
+  try {
+    const { otp } = await generateOtp(parsed.data.phone)
+    const twilioConfigured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN)
 
-  // In production: send via WhatsApp API
-  // await sendWhatsAppMessage(parsed.data.phone, `Dein SonnetCal Code: ${otp}`)
-  
-  // In development: log to console
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`📱 OTP for ${parsed.data.phone}: ${otp}`)
+    return NextResponse.json({
+      success: true,
+      message: twilioConfigured ? 'Code wurde via WhatsApp gesendet' : 'Code wurde gesendet',
+      // Always expose OTP in dev mode for easy testing
+      ...(process.env.NODE_ENV === 'development' && { devOtp: otp }),
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unbekannter Fehler'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  return NextResponse.json({ 
-    success: true, 
-    message: 'Code wurde gesendet',
-    // Only expose OTP in dev for testing
-    ...(process.env.NODE_ENV === 'development' && { devOtp: otp })
-  })
 }

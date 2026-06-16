@@ -2,17 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Calendar, Plus, User, Music2 } from 'lucide-react'
+import { Calendar, Plus, User, Music2, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/calendar', icon: Calendar, label: 'Kalender' },
-  { href: '/events/new', icon: Plus, label: 'Event' },
-  { href: '/profile', icon: User, label: 'Profil' },
+  { href: '/calendar',    icon: Calendar,     label: 'Kalender' },
+  { href: '/events/new',  icon: Plus,         label: 'Event' },
+  { href: '/profile',     icon: User,         label: 'Profil' },
 ]
 
-export default function Nav() {
+type Props = { isAdmin?: boolean }
+
+export default function Nav({ isAdmin }: Props) {
   const pathname = usePathname()
+
+  const allItems = isAdmin
+    ? [...navItems, { href: '/admin/review', icon: ShieldCheck, label: 'Admin' }]
+    : navItems
 
   return (
     <>
@@ -26,7 +32,7 @@ export default function Nav() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {navItems.map(({ href, icon: Icon, label }) => (
+          {allItems.map(({ href, icon: Icon, label }) => (
             <Link
               key={href}
               href={href}
@@ -47,14 +53,14 @@ export default function Nav() {
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-night-800/50">
         <div className="flex items-center justify-around px-2 py-3">
-          {navItems.map(({ href, icon: Icon, label }) => {
+          {allItems.map(({ href, icon: Icon, label }) => {
             const active = pathname.startsWith(href)
             return (
               <Link
                 key={href}
                 href={href}
                 className={cn(
-                  'flex flex-col items-center gap-1 px-4 py-1 rounded-xl transition-all duration-200',
+                  'flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all duration-200',
                   active ? 'text-neon-pink' : 'text-night-500 hover:text-night-200'
                 )}
               >

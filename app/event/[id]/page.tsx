@@ -7,12 +7,13 @@ import Nav from '@/components/layout/Nav'
 import AttendButton from '@/components/events/AttendButton'
 import { MapPin, Clock, Ticket, ArrowLeft, Calendar, User, Globe } from 'lucide-react'
 
-type Props = { params: { id: string } }
+type Props = { params: Promise<{ id: string }> }
 
 export default async function EventDetailPage({ params }: Props) {
+  const { id } = await params
   const [event, session] = await Promise.all([
     prisma.event.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         organizer: { select: { id: true, name: true } },
         _count: { select: { attendances: true } },
@@ -37,7 +38,7 @@ export default async function EventDetailPage({ params }: Props) {
 
   return (
     <div className="min-h-screen">
-      <Nav />
+      <Nav isAdmin={session?.user?.role === 'ADMIN'} />
       <main className="md:pt-16 pb-24 md:pb-8 max-w-2xl mx-auto px-4 pt-6">
         {/* Back */}
         <Link href="/calendar" className="btn-ghost pl-0 mb-6 inline-flex">
@@ -47,8 +48,8 @@ export default async function EventDetailPage({ params }: Props) {
 
         {/* Flyer */}
         {event.flyerUrl && (
-          <div className="rounded-2xl overflow-hidden mb-6 aspect-[4/3] bg-night-900">
-            <img src={event.flyerUrl} alt={event.title} className="w-full h-full object-cover" />
+          <div className="rounded-2xl overflow-hidden mb-6 bg-night-900">
+            <img src={event.flyerUrl} alt={event.title} className="w-full h-auto object-contain" />
           </div>
         )}
 
